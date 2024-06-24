@@ -1,5 +1,37 @@
 # OutlineWiki Backup
 
+![OutlineWikiLogo](outlinewikibackup_logo.webp)
+
+## Description
+
+This is a Go binary to backup an OutlineWiki instance. It uses the OutlineWiki API to export the data and saves it locally. Optionally, it can upload the backup to an S3/MinIO bucket.
+
+This project was inspired by the lack of a built-in backup feature in OutlineWiki, and the need to have a backup of the data in case of data loss. Also, as a response to the lack of any practical backup examples in the [OutlineWiki documentation](https://docs.getoutline.com/s/hosting/doc/backups-KZtPOADCHG).
+
+## Usage
+
+### Create API Key in OutlineWiki
+
+1. Go to the OutlineWiki instance.
+2. Click on the user icon in the lower-left corner.
+3. Click on "Preferences".
+4. Click on "API".
+5. Click on "+ New API Key".
+
+### Run backup to MinIO bucket using Podman
+
+```bash
+podman run --rm \
+-e API_BASE_URL='https://myoutlinewiki.example.com' \
+-e AUTH_TOKEN='ol_api_abcd1234' \
+-e AWS_ACCESS_KEY_ID='AKIA5XQW2PQEEK5FKYFS' \
+-e AWS_SECRET_ACCESS_KEY='s3cr3t' \
+-e MINIO_ENDPOINT='https://minio.example.com' \
+-e S3_BUCKET_NAME='outline' \
+-e UPLOAD_TO_S3='true' \
+ghcr.io/stenstromen/outlinewikibackup:latest
+```
+
 ## Environment Variables
 
 - `SAVE_DIR`: The directory to save the file locally, defaults to `/tmp/outlinewikibackups` if not set.
