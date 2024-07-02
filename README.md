@@ -2,6 +2,8 @@
 
 ![OutlineWikiLogo](outlinewikibackup_logo.webp)
 
+[toc]
+
 ## Description
 
 This is a Go binary to backup an OutlineWiki instance. It uses the OutlineWiki API to export the data and saves it locally. Optionally, it can upload the backup to an S3/MinIO bucket.
@@ -30,6 +32,102 @@ podman run --rm \
 -e S3_BUCKET_NAME='outline' \
 -e UPLOAD_TO_S3='true' \
 ghcr.io/stenstromen/outlinewikibackup:latest
+```
+
+### Example Kubernetes Cronjob
+
+MinIO requirements for the Kubernetes CronJob are:
+
+1. A running MinIO instance.
+1. A bucket named outline.
+1. The access key ID and secret access key for the MinIO instance.
+1. The MinIO instance should be accessible at the specified endpoint.
+
+```yaml
+apiVersion: v1
+data:
+  auth-token: b2xfYXBpX2FiY2QxMjM0
+  minio-access-key-id: QUtJQTVYUVcyUFFFRUs1RktZRlM=
+  minio-secret-access-key: czNjcjN0
+kind: Secret
+metadata:
+  name: outline-backup-secrets
+  namespace: default
+type: Opaque
+
+---
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: outline-backup
+  namespace: default
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 3600
+      backoffLimit: 2
+      template:
+        spec:
+          containers:
+          - env:
+            - name: KEEP_BACKUPS
+              value: '7'
+            - name: API_BASE_URL
+              value: https://outline.example.com
+            - name: S3_BUCKET_NAME
+              value: outline
+            - name: UPLOAD_TO_S3
+              value: 'true'
+            - name: MINIO_ENDPOINT
+              value: https://minio.example.com
+            - name: AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: auth-token
+                  name: outline-backup-secrets
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: minio-access-key-id
+                  name: outline-backup-secrets
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: minio-secret-access-key
+                  name: outline-backup-secrets
+            securityContext:
+              runAsUser: 65534
+              runAsGroup: 65534
+              privileged: false
+              runAsNonRoot: true
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              procMount: Default
+              capabilities:
+                drop: ["ALL"]
+              seccompProfile:
+                type: RuntimeDefault
+            image: ghcr.io/stenstromen/outlinewikibackup:latest
+            imagePullPolicy: IfNotPresent
+            name: outline-backup
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+            volumeMounts:
+            - name: tmp
+              mountPath:  /tmp
+          dnsPolicy: ClusterFirst
+          restartPolicy: Never
+          schedulerName: default-scheduler
+          terminationGracePeriodSeconds: 30
+          volumes:
+          - name: tmp
+            emptyDir: {}
+  schedule: '@daily'
+  successfulJobsHistoryLimit: 0
+  suspend: false
 ```
 
 ## Environment Variables
