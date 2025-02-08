@@ -1,13 +1,10 @@
-FROM golang:1.22-alpine as build
-WORKDIR /
-COPY go.mod go.sum ./
-RUN go mod download
+FROM golang:1.23-alpine as build
+WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o /outlinewikibackup
+RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -installsuffix cgo -o /outlinewikibackup ./
 
-FROM alpine:latest
-RUN addgroup -S outlinewikibackup && adduser -S outlinewikibackup -G outlinewikibackup
-WORKDIR /usr/src/app
-COPY --from=build /outlinewikibackup /usr/src/app/outlinewikibackup
-USER outlinewikibackup
-CMD ["./outlinewikibackup"]
+FROM scratch
+COPY --from=build /outlinewikibackup /
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+USER 65534:65534
+CMD ["/outlinewikibackup"]
