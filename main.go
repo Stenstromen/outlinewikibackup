@@ -1,9 +1,16 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stenstromen/outlinewikibackup/api"
 	"github.com/stenstromen/outlinewikibackup/file"
 )
@@ -15,6 +22,51 @@ func init() {
 
 	if _, exists := os.LookupEnv("AUTH_TOKEN"); !exists {
 		log.Fatal("AUTH_TOKEN environment variable is not set.")
+	}
+
+	// Check if temp directory is writable
+	tempDir := os.TempDir()
+	testFile := tempDir + "/test_write"
+	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {
+		log.Fatal("Temporary directory is not writable:", err)
+	}
+	os.Remove(testFile)
+
+	// Check if API endpoint is reachable
+	apiBaseURL := os.Getenv("API_BASE_URL")
+	client := &http.Client{Timeout: 5 * time.Second}
+	_, err := client.Get(apiBaseURL)
+	if err != nil {
+		log.Fatal("API endpoint is not reachable:", err)
+	}
+
+	// Check S3/MinIO connectivity if UPLOAD_TO_S3 is enabled
+	if os.Getenv("UPLOAD_TO_S3") == "true" {
+		cfg, err := config.LoadDefaultConfig(context.Background(),
+			config.WithEndpointResolver(aws.EndpointResolverFunc(
+				func(service, region string) (aws.Endpoint, error) {
+					return aws.Endpoint{
+						URL:               os.Getenv("S3_ENDPOINT"),
+						SigningRegion:     os.Getenv("AWS_REGION"),
+						HostnameImmutable: true,
+					}, nil
+				})),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+				os.Getenv("AWS_ACCESS_KEY_ID"),
+				os.Getenv("AWS_SECRET_ACCESS_KEY"),
+				"",
+			)),
+		)
+		if err != nil {
+			log.Fatal("Failed to create S3/MinIO config:", err)
+		}
+
+		// Try to list buckets to verify connectivity
+		s3Client := s3.NewFromConfig(cfg)
+		_, err = s3Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+		if err != nil {
+			log.Fatal("S3/MinIO is not reachable:", err)
+		}
 	}
 }
 

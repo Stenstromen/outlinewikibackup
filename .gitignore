@@ -1,1 +1,4 @@
-.env
+.envrc
+.DS_Store
+tmp
+outlinewikibackups
