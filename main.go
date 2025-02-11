@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -42,21 +43,38 @@ func init() {
 
 	// Check S3/MinIO connectivity if UPLOAD_TO_S3 is enabled
 	if os.Getenv("UPLOAD_TO_S3") == "true" {
-		cfg, err := config.LoadDefaultConfig(context.Background(),
-			config.WithEndpointResolver(aws.EndpointResolverFunc(
-				func(service, region string) (aws.Endpoint, error) {
-					return aws.Endpoint{
-						URL:               os.Getenv("S3_ENDPOINT"),
-						SigningRegion:     os.Getenv("AWS_REGION"),
-						HostnameImmutable: true,
-					}, nil
-				})),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-				os.Getenv("AWS_ACCESS_KEY_ID"),
-				os.Getenv("AWS_SECRET_ACCESS_KEY"),
-				"",
-			)),
-		)
+		var cfg aws.Config
+		var err error
+
+		if endpoint := os.Getenv("MINIO_ENDPOINT"); endpoint != "" {
+			if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+				endpoint = "https://" + endpoint
+			}
+
+			cfg, err = config.LoadDefaultConfig(context.Background(),
+				config.WithRegion("us-east-1"),
+				config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+					os.Getenv("AWS_ACCESS_KEY_ID"),
+					os.Getenv("AWS_SECRET_ACCESS_KEY"),
+					"",
+				)),
+				config.WithEndpointResolver(aws.EndpointResolverFunc(
+					func(service, region string) (aws.Endpoint, error) {
+						return aws.Endpoint{
+							PartitionID:       "aws",
+							URL:               endpoint,
+							SigningRegion:     "us-east-1",
+							HostnameImmutable: true,
+						}, nil
+					},
+				)),
+			)
+		} else {
+			cfg, err = config.LoadDefaultConfig(context.Background(),
+				config.WithRegion(os.Getenv("AWS_REGION")),
+			)
+		}
+
 		if err != nil {
 			log.Fatal("Failed to create S3/MinIO config:", err)
 		}
