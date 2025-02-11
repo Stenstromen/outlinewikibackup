@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -22,6 +23,10 @@ func UploadToS3(filename string) error {
 	var err error
 
 	if endpoint := os.Getenv("MINIO_ENDPOINT"); endpoint != "" {
+		if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+			endpoint = "https://" + endpoint
+		}
+
 		cfg, err = config.LoadDefaultConfig(context.TODO(),
 			config.WithRegion("us-east-1"),
 			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
@@ -34,7 +39,7 @@ func UploadToS3(filename string) error {
 					return aws.Endpoint{
 						PartitionID:       "aws",
 						URL:               endpoint,
-						SigningRegion:     "us-east-2",
+						SigningRegion:     "us-east-1",
 						HostnameImmutable: true,
 					}, nil
 				},
@@ -88,6 +93,10 @@ func KeepOnlyNBackups(keepBackups string) error {
 		var err error
 
 		if endpoint := os.Getenv("MINIO_ENDPOINT"); endpoint != "" {
+			if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+				endpoint = "https://" + endpoint
+			}
+
 			cfg, err = config.LoadDefaultConfig(context.TODO(),
 				config.WithRegion("us-east-1"),
 				config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
@@ -100,7 +109,7 @@ func KeepOnlyNBackups(keepBackups string) error {
 						return aws.Endpoint{
 							PartitionID:       "aws",
 							URL:               endpoint,
-							SigningRegion:     "us-east-2",
+							SigningRegion:     "us-east-1",
 							HostnameImmutable: true,
 						}, nil
 					},
