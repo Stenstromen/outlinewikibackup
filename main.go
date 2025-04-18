@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,11 +26,18 @@ func init() {
 		log.Fatal("AUTH_TOKEN environment variable is not set.")
 	}
 
-	// Check if temp directory is writable
-	tempDir := os.TempDir()
-	testFile := tempDir + "/test_write"
+	saveDir := os.Getenv("SAVE_DIR")
+	if saveDir == "" {
+		saveDir = "/tmp/outlinewikibackups"
+	}
+
+	if err := os.MkdirAll(saveDir, os.ModePerm); err != nil {
+		log.Fatal("Unable to create save directory:", err)
+	}
+
+	testFile := filepath.Join(saveDir, "test_write")
 	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {
-		log.Fatal("Temporary directory is not writable:", err)
+		log.Fatal("Save directory is not writable:", err)
 	}
 	os.Remove(testFile)
 
