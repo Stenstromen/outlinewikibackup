@@ -46,6 +46,13 @@ jobs:
           repository: stenstromen/flux
           token: ${{ secrets.KUBE_GITHUB_TOKEN }}
           path: flux-repo
+          fetch-depth: 0
+
+      - name: Fetch repository content
+        run: |
+          cd flux-repo
+          git fetch origin
+          git checkout main
 
       - name: Update CronJob image tag
         run: |
