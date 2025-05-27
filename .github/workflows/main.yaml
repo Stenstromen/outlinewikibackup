@@ -56,7 +56,7 @@ jobs:
 
       - name: Update CronJob image tag
         run: |
-          CRONJOB_FILE="flux-repo/cronjobs/stinky/outlinewikibackup.yaml"
+          CRONJOB_FILE="flux-repo/cronjobs/stinky/outlinebackup.yaml"
           OLD_IMAGE=$(grep "image:" "$CRONJOB_FILE" | awk '{print $2}')
           NEW_IMAGE="ghcr.io/stenstromen/outlinewikibackup:$VERSIONTAG"
           
@@ -71,6 +71,6 @@ jobs:
           cd flux-repo
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git add cronjobs/stinky/outlinewikibackup.yaml
+          git add cronjobs/stinky/outlinebackup.yaml
           git commit -F ../commit_message.txt
           git push
