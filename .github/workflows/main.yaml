@@ -45,11 +45,11 @@ jobs:
         with:
           repository: stenstromen/flux
           token: ${{ secrets.KUBE_GITHUB_TOKEN }}
-          path: flux
+          path: .
 
       - name: Update CronJob image tag
         run: |
-          CRONJOB_FILE="flux/cronjobs/stinky/outlinewikibackup.yaml"
+          CRONJOB_FILE="cronjobs/stinky/outlinewikibackup.yaml"
           OLD_IMAGE=$(grep "image:" "$CRONJOB_FILE" | awk '{print $2}')
           NEW_IMAGE="ghcr.io/stenstromen/outlinewikibackup:$VERSIONTAG"
 
