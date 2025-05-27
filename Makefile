@@ -52,7 +52,7 @@ minio-deploy: test-deps network
 	@echo "ℹ️ Creating temporary volume for backup data..."
 	podman volume create $(TEMP_VOLUME) || true
 
-test: minio-deploy
+test: build minio-deploy
 	@echo "ℹ️ Running backup test..."
 	podman run --rm \
 		--network $(NETWORK_NAME) \
