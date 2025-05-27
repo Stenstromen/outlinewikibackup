@@ -45,23 +45,23 @@ jobs:
         with:
           repository: stenstromen/flux
           token: ${{ secrets.KUBE_GITHUB_TOKEN }}
-          path: .
+          path: flux-repo
 
       - name: Update CronJob image tag
         run: |
-          CRONJOB_FILE="cronjobs/stinky/outlinewikibackup.yaml"
+          CRONJOB_FILE="flux-repo/cronjobs/stinky/outlinewikibackup.yaml"
           OLD_IMAGE=$(grep "image:" "$CRONJOB_FILE" | awk '{print $2}')
           NEW_IMAGE="ghcr.io/stenstromen/outlinewikibackup:$VERSIONTAG"
-
+          
           # Update the image tag
           sed -i "s|image:.*|image: $NEW_IMAGE|" "$CRONJOB_FILE"
-
+          
           # Create commit message
           echo "Update image: $OLD_IMAGE -> $NEW_IMAGE" > commit_message.txt
 
       - name: Commit and Push Flux CronJob Update
         run: |
-          cd flux
+          cd flux-repo
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
           git add cronjobs/stinky/outlinewikibackup.yaml
