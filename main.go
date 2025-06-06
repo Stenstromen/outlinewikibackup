@@ -76,6 +76,7 @@ func init() {
 						}, nil
 					},
 				)),
+				config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
 			)
 		} else {
 			cfg, err = config.LoadDefaultConfig(context.Background(),

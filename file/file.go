@@ -44,6 +44,7 @@ func UploadToS3(filename string) error {
 					}, nil
 				},
 			)),
+			config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
 		)
 	} else {
 		cfg, err = config.LoadDefaultConfig(context.TODO(),
