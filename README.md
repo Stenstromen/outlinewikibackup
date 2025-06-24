@@ -155,3 +155,4 @@ spec:
 - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`: Credentials for AWS S3 or MinIO.
 - `KEEP_BACKUPS` (optional): The number of backups to keep, defaults to infinite.
 - `SLEEP_DURATION` (optional): The duration to sleep (wait) before checking export status, defaults to 10 seconds.
+- `MINIMAL_S3_PERMISSIONS` (optional): If set to `"true"`, skips operations that require additional S3/MinIO permissions beyond the minimal set. This includes skipping the ListBuckets connectivity check and the ListObjectsV2 backup cleanup operation. This allows the application to work with minimal S3/MinIO permissions that only include `s3:PutObject`, `s3:AbortMultipartUpload`, `s3:DeleteObject`, and `s3:ListMultipartUploadParts`. (See [minimal-policy-example.json](minimal-policy-example.json) for the minimal permissions set.)
