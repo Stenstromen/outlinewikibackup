@@ -90,6 +90,13 @@ func KeepOnlyNBackups(keepBackups string) error {
 		panic(err)
 	}
 	if s3env == "true" {
+		// Skip S3 backup cleanup if MINIMAL_S3_PERMISSIONS is enabled
+		// because minimal permissions don't include ListObjectsV2
+		if os.Getenv("MINIMAL_S3_PERMISSIONS") == "true" {
+			log.Println("Skipping S3 backup cleanup due to minimal permissions (MINIMAL_S3_PERMISSIONS enabled)")
+			return nil
+		}
+
 		var cfg aws.Config
 		var err error
 

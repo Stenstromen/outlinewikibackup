@@ -88,11 +88,16 @@ func init() {
 			log.Fatal("Failed to create S3/MinIO config:", err)
 		}
 
-		// Try to list buckets to verify connectivity
-		s3Client := s3.NewFromConfig(cfg)
-		_, err = s3Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
-		if err != nil {
-			log.Fatal("S3/MinIO is not reachable:", err)
+		// Skip ListBuckets check if MINIMAL_S3_PERMISSIONS is set to "true"
+		if os.Getenv("MINIMAL_S3_PERMISSIONS") != "true" {
+			// Try to list buckets to verify connectivity
+			s3Client := s3.NewFromConfig(cfg)
+			_, err = s3Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+			if err != nil {
+				log.Fatal("S3/MinIO is not reachable:", err)
+			}
+		} else {
+			log.Println("S3/MinIO connectivity check disabled via MINIMAL_S3_PERMISSIONS")
 		}
 	}
 }
