@@ -64,10 +64,17 @@ func UploadToS3(filename string) error {
 	}
 	defer file.Close()
 
-	fileInfo, _ := file.Stat()
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("unable to get file info for %q: %w", filename, err)
+	}
+
 	var size = fileInfo.Size()
 	buffer := make([]byte, size)
-	file.Read(buffer)
+	_, err = file.Read(buffer)
+	if err != nil {
+		return fmt.Errorf("unable to read file %q: %w", filename, err)
+	}
 
 	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(os.Getenv("S3_BUCKET_NAME")),

@@ -56,7 +56,16 @@ func makeAPIRequest(endpoint string, payload map[string]string) (resp *http.Resp
 	req.Header.Set("Authorization", "Bearer "+authToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	// Use a more robust HTTP client with better timeout handling
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+
 	resp, err = client.Do(req)
 	if err != nil {
 		log.Println("Error sending request:", err)

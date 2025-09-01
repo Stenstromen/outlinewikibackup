@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -18,6 +19,10 @@ import (
 )
 
 func init() {
+	// Enable container-aware GOMAXPROCS for better performance in containers
+	// This will automatically adjust based on cgroup CPU limits
+	runtime.SetDefaultGOMAXPROCS()
+
 	if _, exists := os.LookupEnv("API_BASE_URL"); !exists {
 		log.Fatal("API_BASE_URL environment variable is not set.")
 	}

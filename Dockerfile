@@ -1,7 +1,8 @@
 FROM golang:1.25-alpine as build
 WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -installsuffix cgo -o /outlinewikibackup ./
+# Enable experimental garbage collector for better performance
+RUN CGO_ENABLED=0 GOOS=linux GOEXPERIMENT=greenteagc go build -a -ldflags='-w -s' -installsuffix cgo -o /outlinewikibackup ./
 
 FROM scratch
 COPY --from=build /outlinewikibackup /
