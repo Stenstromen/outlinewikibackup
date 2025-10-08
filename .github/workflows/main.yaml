@@ -8,7 +8,106 @@ env:
   IMAGE_NAME: outlinewikibackup
 
 jobs:
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create Docker Network
+        run: |
+          docker network create outline-backup-test
+
+      - name: Start MinIO Server
+        run: |
+          docker run -d \
+            --name minio \
+            --network outline-backup-test \
+            -p 9000:9000 \
+            -p 9001:9001 \
+            -e MINIO_ROOT_USER=minio \
+            -e MINIO_ROOT_PASSWORD=minio123 \
+            minio/minio:latest \
+            server /data --console-address ":9001"
+
+      - name: Wait for MinIO
+        run: |
+          timeout 60 bash -c 'until curl -f http://127.0.0.1:9000/minio/health/live; do sleep 2; done'
+          echo "MinIO is ready"
+
+      - name: Install MinIO Client in container
+        run: |
+          # Detect architecture and download appropriate MinIO client
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "x86_64" ]; then
+            MC_URL="https://dl.min.io/client/mc/release/linux-amd64/mc"
+          elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            MC_URL="https://dl.min.io/client/mc/release/linux-arm64/mc"
+          else
+            echo "Unsupported architecture: $ARCH"
+            exit 1
+          fi
+          curl $MC_URL \
+            --create-dirs \
+            -o $HOME/minio-binaries/mc && \
+            chmod +x $HOME/minio-binaries/mc
+
+      - name: Creating bucket using MinIO Client
+        run: |
+          $HOME/minio-binaries/mc alias set myminio http://127.0.0.1:9000 minio minio123 && \
+          $HOME/minio-binaries/mc mb myminio/outline-test && \
+          $HOME/minio-binaries/mc policy set public myminio/outline-test
+
+      - name: Build Mock Outline Server
+        run: |
+          cd mock-outline-server
+          docker build -t mock-outline-server --load .
+
+      - name: Build OutlineWiki Backup Image
+        run: |
+          docker build -t outlinewikibackup --load .
+
+      - name: Start Mock Outline Server
+        run: |
+          docker run -d \
+            --name mock-outline-server \
+            --network outline-backup-test \
+            -p 3000:3000 \
+            mock-outline-server
+
+      - name: Create temporary volume
+        run: |
+          docker volume create outline-backup-temp
+          docker run --rm -v outline-backup-temp:/tmp alpine:latest chown -R 65534:65534 /tmp
+
+      - name: Run Integration Test
+        run: |
+          docker run --rm \
+            --network outline-backup-test \
+            -v outline-backup-temp:/tmp \
+            -e API_BASE_URL='http://mock-outline-server:3000' \
+            -e AUTH_TOKEN='test-token' \
+            -e AWS_ACCESS_KEY_ID='minio' \
+            -e AWS_SECRET_ACCESS_KEY='minio123' \
+            -e MINIO_ENDPOINT='http://minio:9000' \
+            -e S3_BUCKET_NAME='outline-test' \
+            -e UPLOAD_TO_S3='true' \
+            -e KEEP_BACKUPS='3' \
+            outlinewikibackup
+
+      - name: Verifying backup files in MinIO
+        run: |
+          if $HOME/minio-binaries/mc ls myminio/outline-test | grep -q ".zip"; then
+            echo "✅ Integration test passed: Found backup(s) in MinIO bucket"
+            exit 0
+          else
+            echo "❌ Integration test failed: No backups found in MinIO bucket"
+            exit 1
+          fi
+
   build-and-push:
+    name: Build and Push to ghcr.io
+    needs: integration-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -35,7 +134,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
   flux-update:
-    needs: [build-and-push]
+    name: Flux Update
+    needs: [integration-test, build-and-push]
     runs-on: ubuntu-latest
     env:
       VERSIONTAG: ${{ github.event.release.tag_name }}
@@ -59,10 +159,10 @@ jobs:
           CRONJOB_FILE="flux-repo/cronjobs/stinky/outlinebackup.yaml"
           OLD_IMAGE=$(grep "image:" "$CRONJOB_FILE" | awk '{print $2}')
           NEW_IMAGE="ghcr.io/stenstromen/outlinewikibackup:$VERSIONTAG"
-          
+
           # Update the image tag
           sed -i "s|image:.*|image: $NEW_IMAGE|" "$CRONJOB_FILE"
-          
+
           # Create commit message
           echo "Update image: $OLD_IMAGE -> $NEW_IMAGE" > commit_message.txt
 
