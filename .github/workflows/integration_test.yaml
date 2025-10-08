@@ -77,6 +77,11 @@ jobs:
             -p 3000:3000 \
             mock-outline-server
 
+      - name: Create temporary volume
+        run: |
+          docker volume create outline-backup-temp
+          docker run --rm -v outline-backup-temp:/tmp alpine:latest chown -R 65534:65534 /tmp
+
       - name: Run Integration Test
         run: |
           docker run --rm \
