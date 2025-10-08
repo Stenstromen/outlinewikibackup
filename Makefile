@@ -7,7 +7,11 @@ NETWORK_NAME = outline-backup-test
 MINIO_CONTAINER = minio-test
 TEMP_VOLUME = outline-backup-temp
 
-.PHONY: build test clean test-deps network minio-deploy
+# Mock Outline server variables
+MOCK_OUTLINE_CONTAINER = mock-outline-test
+MOCK_OUTLINE_PORT = 3001
+
+.PHONY: build test clean test-deps network minio-deploy mock-outline-deploy test-with-mock
 
 test-deps:
 	@which podman >/dev/null 2>&1 || (echo "❌ podman is required but not installed. Aborting." && exit 1)
@@ -52,6 +56,27 @@ minio-deploy: test-deps network
 	@echo "ℹ️ Creating temporary volume for backup data..."
 	podman volume create $(TEMP_VOLUME) || true
 
+mock-outline-deploy: test-deps network
+	@echo "ℹ️ Building mock Outline server..."
+	cd mock-outline-server && podman build -t mock-outline-server:latest .
+
+	@echo "ℹ️ Cleaning up any existing mock Outline container..."
+	podman stop $(MOCK_OUTLINE_CONTAINER) 2>/dev/null || true
+	podman rm $(MOCK_OUTLINE_CONTAINER) 2>/dev/null || true
+
+	@echo "ℹ️ Starting mock Outline server..."
+	podman run -dt \
+		--name $(MOCK_OUTLINE_CONTAINER) \
+		--network $(NETWORK_NAME) \
+		-p $(MOCK_OUTLINE_PORT):3000 \
+		mock-outline-server:latest
+
+	@echo "ℹ️ Waiting for mock Outline server to initialize..."
+	sleep 5
+
+	@echo "ℹ️ Verifying mock Outline server status..."
+	podman logs $(MOCK_OUTLINE_CONTAINER)
+
 test: build minio-deploy
 	@echo "ℹ️ Running backup test..."
 	podman run --rm \
@@ -87,9 +112,46 @@ test: build minio-deploy
 		exit 1; \
 	fi
 
+test-with-mock: build mock-outline-deploy minio-deploy
+	@echo "ℹ️ Running backup test against mock Outline server..."
+	podman run --rm \
+		--network $(NETWORK_NAME) \
+		-v $(TEMP_VOLUME):/tmp \
+		-e API_BASE_URL='http://$(MOCK_OUTLINE_CONTAINER):3000' \
+		-e AUTH_TOKEN='test-token' \
+		-e AWS_ACCESS_KEY_ID='$(MINIO_ACCESS_KEY)' \
+		-e AWS_SECRET_ACCESS_KEY='$(MINIO_SECRET_KEY)' \
+		-e MINIO_ENDPOINT='http://$(MINIO_CONTAINER):9000' \
+		-e S3_BUCKET_NAME='$(MINIO_BUCKET)' \
+		-e UPLOAD_TO_S3='true' \
+		-e KEEP_BACKUPS='3' \
+		localhost/$(IMAGE_NAME):$(IMAGE_TAG)
+
+	@echo "ℹ️ Verifying backup files in MinIO..."
+	podman run --rm --entrypoint /bin/sh \
+		--network $(NETWORK_NAME) \
+		docker.io/minio/mc -c " \
+		mc alias set myminio http://$(MINIO_CONTAINER):9000 $(MINIO_ACCESS_KEY) $(MINIO_SECRET_KEY) && \
+		mc ls myminio/$(MINIO_BUCKET) \
+		"
+	
+	@if podman run --rm --entrypoint /bin/sh \
+		--network $(NETWORK_NAME) \
+		docker.io/minio/mc -c " \
+		mc alias set myminio http://$(MINIO_CONTAINER):9000 $(MINIO_ACCESS_KEY) $(MINIO_SECRET_KEY) && \
+		mc ls myminio/$(MINIO_BUCKET) \
+		" | grep -q ".zip"; then \
+		echo "✅ Integration test passed: Found backup(s) in MinIO bucket"; \
+	else \
+		echo "❌ Integration test failed: No backups found in MinIO bucket"; \
+		exit 1; \
+	fi
+
 clean:
 	@echo "ℹ️ Cleaning up containers, volumes, and network..."
 	podman stop $(MINIO_CONTAINER) || true
 	podman rm $(MINIO_CONTAINER) || true
+	podman stop $(MOCK_OUTLINE_CONTAINER) || true
+	podman rm $(MOCK_OUTLINE_CONTAINER) || true
 	podman volume rm $(TEMP_VOLUME) || true
 	podman network rm $(NETWORK_NAME) || true 
