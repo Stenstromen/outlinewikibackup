@@ -9,55 +9,16 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/stenstromen/outlinewikibackup/s3api"
 )
 
 func UploadToS3(filename string) error {
-	var cfg aws.Config
-	var err error
-
-	if endpoint := os.Getenv("MINIO_ENDPOINT"); endpoint != "" {
-		if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
-			endpoint = "https://" + endpoint
-		}
-
-		cfg, err = config.LoadDefaultConfig(context.TODO(),
-			config.WithRegion("us-east-1"),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-				os.Getenv("AWS_ACCESS_KEY_ID"),
-				os.Getenv("AWS_SECRET_ACCESS_KEY"),
-				"",
-			)),
-			config.WithEndpointResolver(aws.EndpointResolverFunc(
-				func(service, region string) (aws.Endpoint, error) {
-					return aws.Endpoint{
-						PartitionID:       "aws",
-						URL:               endpoint,
-						SigningRegion:     "us-east-1",
-						HostnameImmutable: true,
-					}, nil
-				},
-			)),
-			config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
-		)
-	} else {
-		cfg, err = config.LoadDefaultConfig(context.TODO(),
-			config.WithRegion(os.Getenv("AWS_REGION")),
-		)
-	}
-
-	if err != nil {
-		return fmt.Errorf("unable to load AWS SDK config: %w", err)
-	}
-
+	cfg := s3api.GetConfig()
 	s3Client := s3.NewFromConfig(cfg)
-
 	file, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("unable to open file %q: %w", filename, err)
@@ -104,42 +65,7 @@ func KeepOnlyNBackups(keepBackups string) error {
 			return nil
 		}
 
-		var cfg aws.Config
-		var err error
-
-		if endpoint := os.Getenv("MINIO_ENDPOINT"); endpoint != "" {
-			if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
-				endpoint = "https://" + endpoint
-			}
-
-			cfg, err = config.LoadDefaultConfig(context.TODO(),
-				config.WithRegion("us-east-1"),
-				config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-					os.Getenv("AWS_ACCESS_KEY_ID"),
-					os.Getenv("AWS_SECRET_ACCESS_KEY"),
-					"",
-				)),
-				config.WithEndpointResolver(aws.EndpointResolverFunc(
-					func(service, region string) (aws.Endpoint, error) {
-						return aws.Endpoint{
-							PartitionID:       "aws",
-							URL:               endpoint,
-							SigningRegion:     "us-east-1",
-							HostnameImmutable: true,
-						}, nil
-					},
-				)),
-			)
-		} else {
-			cfg, err = config.LoadDefaultConfig(context.TODO(),
-				config.WithRegion(os.Getenv("AWS_REGION")),
-			)
-		}
-
-		if err != nil {
-			return fmt.Errorf("unable to load AWS SDK config: %w", err)
-		}
-
+		cfg := s3api.GetConfig()
 		s3Client := s3.NewFromConfig(cfg)
 
 		resp, err := s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
