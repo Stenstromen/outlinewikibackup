@@ -2,7 +2,7 @@ name: OutlineWiki Backup CI
 
 on:
   release:
-    types: [created]
+    types: [ created ]
 
 env:
   IMAGE_NAME: outlinewikibackup
@@ -47,10 +47,11 @@ jobs:
             echo "Unsupported architecture: $ARCH"
             exit 1
           fi
-          curl $MC_URL \
+          curl --fail --silent --show-error --location "$MC_URL" \
             --create-dirs \
-            -o $HOME/minio-binaries/mc && \
-            chmod +x $HOME/minio-binaries/mc
+            --output "$HOME/minio-binaries/mc" && \
+            chmod +x "$HOME/minio-binaries/mc" && \
+            "$HOME/minio-binaries/mc" --version
 
       - name: Creating bucket using MinIO Client
         run: |
@@ -135,7 +136,7 @@ jobs:
 
   flux-update:
     name: Flux Update
-    needs: [integration-test, build-and-push]
+    needs: [ integration-test, build-and-push ]
     runs-on: ubuntu-latest
     env:
       VERSIONTAG: ${{ github.event.release.tag_name }}
