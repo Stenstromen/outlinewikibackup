@@ -1,0 +1,87 @@
+name: Dependabot patch release
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Backstop for a rebase that does not produce a new Pull Request Check run.
+    - cron: "17 * * * *"
+  workflow_run:
+    workflows: ["Pull Request Check"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-patch-release
+  cancel-in-progress: false
+
+env:
+  MINIMUM_PRS: "3"
+
+jobs:
+  plan:
+    if: >
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+      )
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+      pr: ${{ steps.plan.outputs.pr }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/dependabot-release.sh plan
+
+  merge:
+    needs: plan
+    if: needs.plan.result == 'success' && needs.plan.outputs.action == 'merge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      release: ${{ steps.merge.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/dependabot-release.sh merge "${{ needs.plan.outputs.pr }}"
+
+  release:
+    needs: [plan, merge]
+    if: >
+      always() &&
+      needs.plan.result == 'success' &&
+      (needs.merge.result == 'success' || needs.merge.result == 'skipped') &&
+      (
+        needs.plan.outputs.action == 'release' ||
+        needs.merge.outputs.release == 'true'
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/dependabot-release.sh release
