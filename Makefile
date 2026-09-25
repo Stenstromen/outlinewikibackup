@@ -36,7 +36,7 @@ minio-deploy: test-deps network
 		-p 9000:9000 \
 		-e "MINIO_ACCESS_KEY=$(MINIO_ACCESS_KEY)" \
 		-e "MINIO_SECRET_KEY=$(MINIO_SECRET_KEY)" \
-		docker.io/minio/minio server /data
+		quay.io/minio/minio:latest-cicd server /data
 
 	@echo "ℹ️ Waiting for MinIO to initialize..."
 	sleep 10

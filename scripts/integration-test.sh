@@ -13,6 +13,8 @@ trap cleanup EXIT
 
 docker network create outline-backup-test
 
+# quay.io/minio/minio:latest-cicd defaults to the bare `minio` command, which
+# exits without opening a port, so pass `server /data`.
 docker run -d \
   --name minio \
   --network outline-backup-test \
@@ -20,31 +22,40 @@ docker run -d \
   -p 9001:9001 \
   -e MINIO_ROOT_USER=minio \
   -e MINIO_ROOT_PASSWORD=minio123 \
-  minio/minio:latest \
+  -e MINIO_ACCESS_KEY=minio \
+  -e MINIO_SECRET_KEY=minio123 \
+  quay.io/minio/minio:latest-cicd \
   server /data --console-address ":9001"
 
-timeout 60 bash -c 'until curl -f http://127.0.0.1:9000/minio/health/live; do sleep 2; done'
+if ! timeout 60 bash -c 'until curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; do sleep 2; done'; then
+  echo "MinIO did not become ready" >&2
+  docker logs minio || true
+  exit 1
+fi
 echo "MinIO is ready"
 
-arch="$(uname -m)"
-case "$arch" in
-  x86_64) mc_url="https://dl.min.io/client/mc/release/linux-amd64/mc" ;;
-  aarch64 | arm64) mc_url="https://dl.min.io/client/mc/release/linux-arm64/mc" ;;
+# dl.min.io returns HTTP 410. The client is published on GitHub releases.
+mc_release="RELEASE.2025-08-13T08-35-41Z"
+case "$(uname -m)" in
+  x86_64) mc_arch="amd64" ;;
+  aarch64 | arm64) mc_arch="arm64" ;;
   *)
-    echo "Unsupported architecture: $arch" >&2
+    echo "Unsupported architecture: $(uname -m)" >&2
     exit 1
     ;;
 esac
+mc_url="https://github.com/minio/mc/releases/download/${mc_release}/mc.linux-${mc_arch}.${mc_release}"
+mkdir -p "${HOME}/minio-binaries"
+curl -fL "$mc_url" -o "${HOME}/minio-binaries/mc"
+chmod +x "${HOME}/minio-binaries/mc"
+mc="${HOME}/minio-binaries/mc"
+"$mc" --version
 
-curl --fail --silent --show-error --location "$mc_url" \
-  --create-dirs \
-  --output "$HOME/minio-binaries/mc"
-chmod +x "$HOME/minio-binaries/mc"
-"$HOME/minio-binaries/mc" --version
-
-"$HOME/minio-binaries/mc" alias set myminio http://127.0.0.1:9000 minio minio123
-"$HOME/minio-binaries/mc" mb myminio/outline-test
-"$HOME/minio-binaries/mc" policy set public myminio/outline-test
+"$mc" alias set myminio http://127.0.0.1:9000 minio minio123
+"$mc" mb myminio/outline-test
+if ! "$mc" policy set public myminio/outline-test; then
+  "$mc" anonymous set public myminio/outline-test
+fi
 
 docker build -t mock-outline-server --load mock-outline-server
 docker build -t outlinewikibackup --load .
@@ -71,7 +82,7 @@ docker run --rm \
   -e KEEP_BACKUPS='3' \
   outlinewikibackup
 
-if "$HOME/minio-binaries/mc" ls myminio/outline-test | grep -q ".zip"; then
+if "$mc" ls myminio/outline-test | grep -q ".zip"; then
   echo "Integration test passed: Found backup(s) in MinIO bucket"
 else
   echo "Integration test failed: No backups found in MinIO bucket" >&2
