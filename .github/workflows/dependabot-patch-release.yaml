@@ -2,9 +2,9 @@ name: Dependabot patch release
 
 on:
   workflow_dispatch:
-  schedule:
-    # Backstop for a rebase that does not produce a new Pull Request Check run.
-    - cron: "17 * * * *"
+  # A Dependabot open or rebase runs Pull Request Check. That completion
+  # starts this workflow. Conflicting pull requests are left for Dependabot
+  # to rebase; the rebase push is the next trigger.
   workflow_run:
     workflows: ["Pull Request Check"]
     types: [completed]

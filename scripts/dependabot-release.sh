@@ -195,11 +195,26 @@ cmd_merge() {
   if [[ ${#prs[@]} -eq 0 ]]; then
     release_after="true"
     echo "Merged #${number}. No Dependabot pull requests remain, so the patch release can be created."
-  else
-    echo "Merged #${number}. ${#prs[@]} Dependabot pull request(s) still open."
-    echo "Starting the next run to test one more pull request."
-    gh workflow run dependabot-patch-release.yaml --repo "$repo" --ref main
+    return
   fi
+
+  echo "Merged #${number}. ${#prs[@]} Dependabot pull request(s) still open."
+  local next="" candidate candidate_state
+  for candidate in "${prs[@]}"; do
+    candidate_state="$(mergeable_state "$candidate")"
+    if [[ "$candidate_state" == "MERGEABLE" ]]; then
+      next="$candidate"
+      break
+    fi
+    echo "Pull request #${candidate} is ${candidate_state}."
+  done
+  if [[ -n "$next" ]]; then
+    echo "Starting the next run to test pull request #${next}."
+    gh workflow run dependabot-patch-release.yaml --repo "$repo" --ref main
+    return
+  fi
+  echo "The remaining Dependabot pull requests conflict with main."
+  echo "Dependabot rebases those itself. That push runs Pull Request Check, which starts the next merge."
 }
 
 cmd_release() {
